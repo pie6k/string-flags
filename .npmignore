@@ -6,4 +6,8 @@ tsconfig*.json
 jest.config.cjs
 vite.config.ts
 .gitignore
+.yarnrc.yml
+.yarn
+.pnp.*
+yarn.lock
 *.log

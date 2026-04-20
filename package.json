@@ -20,15 +20,16 @@
   "sideEffects": false,
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "npm run clean && vite build",
+    "build": "yarn clean && vite build",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
-    "release:patch": "npm version patch && npm publish",
-    "release:minor": "npm version minor && npm publish",
-    "release:major": "npm version major && npm publish"
+    "prepack": "yarn typecheck && yarn test && yarn build",
+    "release": "yarn version patch && yarn npm publish",
+    "release:patch": "yarn version patch && yarn npm publish",
+    "release:minor": "yarn version minor && yarn npm publish",
+    "release:major": "yarn version major && yarn npm publish"
   },
   "keywords": [
     "flags",
@@ -59,5 +60,6 @@
     "typescript": "^5.4.5",
     "vite": "^5.2.0",
     "vite-plugin-dts": "^3.8.0"
-  }
+  },
+  "packageManager": "yarn@4.14.1+sha512.64df448055b2d37ba269d7db535a469b8da93f8ef1140c25fd7a83c00a8fbaacb214ca0e02553b92a2c54cef78bb67d0b4817fab02001df0e24fac0faccc3b42"
 }

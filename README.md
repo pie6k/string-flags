@@ -35,6 +35,8 @@ Bitmasks are fast and compact. They are also opaque: `5` means nothing without t
 ## Install
 
 ```bash
+yarn add string-flags
+# or
 npm install string-flags
 ```
 
@@ -205,11 +207,14 @@ toggleStringFlag<F>(input: FlagsString<F>, flag: F, options?): FlagsString<F>;
 
 ## Contributing
 
+The repo uses Yarn 4 via [Corepack](https://nodejs.org/api/corepack.html) with the `node-modules` linker. Enable Corepack once (`corepack enable`) and the right Yarn version is picked automatically from `packageManager` in `package.json`.
+
 ```bash
-npm install
-npm test
-npm run typecheck
-npm run build
+corepack enable
+yarn install
+yarn test
+yarn typecheck
+yarn build
 ```
 
 ## License
