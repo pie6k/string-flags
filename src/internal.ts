@@ -56,7 +56,7 @@ export function normalize<T>(
 
 function describeReason(wasReordered: boolean, hadDuplicates: boolean): string {
   const parts: string[] = [];
-  if (wasReordered) parts.push("not properly ordered");
+  if (wasReordered) parts.push("not in alphabetical order");
   if (hadDuplicates) parts.push("contains duplicates");
   return parts.join(" and ");
 }
@@ -80,10 +80,10 @@ export const lexCompare = (a: string, b: string): number =>
 
 export interface StringFlagsOptions {
   /**
-   * When true, input that violates the protocol (duplicates, wrong order)
-   * throws. When false (default), it is normalized and a warning is emitted
-   * on `console.warn`. Unknown flags and invalid characters always throw,
-   * regardless of this setting.
+   * When true, input that violates the protocol (duplicates, or not in
+   * alphabetical order) throws. When false (default), it is normalized
+   * and a warning is emitted on `console.warn`. Unknown flags and invalid
+   * characters always throw, regardless of this setting.
    */
   strict?: boolean;
 }

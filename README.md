@@ -30,13 +30,13 @@ const a1: FlagsString<State> = "busy";                     // 🟢 single flag
 const a2: FlagsString<State> = "blocked,busy";             // 🟢 alphabetical
 const a3: FlagsString<State> = "blocked,busy,error,idle";  // 🟢 full set
 
-const b: FlagsString<State> = "busy,blocked";              // 🔴 wrong order
+const b: FlagsString<State> = "busy,blocked";              // 🔴 wrong alphabetical order
 const c: FlagsString<State> = "busy,busy";                 // 🔴 duplicate
 const d: FlagsString<State> = "paused";                    // 🔴 unknown flag
 const e: FlagsString<State> = "blocked,";                  // 🔴 trailing comma
 ```
 
-Autocomplete lists every legal subset — the empty string, then singletons, pairs, triples, up to the full set. Typos do not compile. When a user edits a string by hand and puts the flags in the wrong order, the runtime normalizes the value and emits a warning (see [The protocol](#the-protocol) below).
+Autocomplete lists every legal subset — the empty string, then singletons, pairs, triples, up to the full set. Typos do not compile. When a user edits a string by hand and puts the flags out of alphabetical order, the runtime normalizes the value and emits a warning that cites the reason (see [The protocol](#the-protocol) below).
 
 ## Example
 
@@ -120,7 +120,7 @@ state.getFlags(s);                   // ["blocked"]
 
 state.isFlag("busy");                // true
 state.isFlagsString("busy,idle");    // true
-state.isFlagsString("idle,busy");    // false — not in protocol form
+state.isFlagsString("idle,busy");    // false — wrong alphabetical order
 ```
 
 ### Exhaustive schemas with `Record<U, true>`
@@ -160,7 +160,7 @@ const state = defineStringFlags<State>({
 
 ## The protocol
 
-`string-flags` is designed for production use — no undefined behaviour, no silent drift. Every value the library produces or accepts follows a single format called _the protocol_.
+`string-flags` is based on a simple, strict protocol aimed at no undefined behaviour and resilience.
 
 **The rules:**
 
@@ -178,7 +178,7 @@ const state = defineStringFlags<State>({
 "blocked,busy,error,idle"
 
 // 🔴 invalid
-"busy,blocked"     // wrong order
+"busy,blocked"     // wrong alphabetical order
 "busy, blocked"    // whitespace
 "busy,busy"        // duplicate
 "blocked,"         // trailing comma
@@ -189,7 +189,7 @@ const state = defineStringFlags<State>({
 
 ```ts
 state.getFlags("busy,blocked");
-// warn: input "busy,blocked" does not follow the protocol (not properly ordered);
+// warn: input "busy,blocked" does not follow the protocol (not in alphabetical order);
 //       normalized to "blocked,busy"
 // returns ["blocked", "busy"]
 
@@ -199,7 +199,7 @@ state.getFlags("busy,busy");
 
 state.getFlags("busy,busy,blocked");
 // warn: input "busy,busy,blocked" does not follow the protocol
-//       (not properly ordered and contains duplicates);
+//       (not in alphabetical order and contains duplicates);
 //       normalized to "blocked,busy"
 ```
 
@@ -220,15 +220,15 @@ state.getFlags("blocked,my-flag");
 
 ## Strict mode
 
-Non-strict mode (the default) is for places where flag strings may have been hand-edited outside of type-controlled code — a database row, a config file, a URL parameter. The library self-fixes and warns.
+Non-strict mode (the default) is for flag strings that may have been edited by a human without an IDE or other type-checking assistance — a database row, a config file, a URL parameter. The library self-fixes the recoverable mistakes and emits a warning.
 
-Strict mode is for places where you never hand-edit flags without type-control (i.e. an IDE with TypeScript). In that world, a protocol violation is always a bug, not a typo, and you want it to fail loudly.
+Strict mode is for places where flag strings only ever come from type-checked code. There a protocol violation is always a bug, and you want it to fail loudly.
 
 Either way, truly ambiguous input (unknown flag names, invalid characters, wrong type) always throws — strict mode only changes how **recoverable** problems are surfaced.
 
 | Situation                                    | Non-strict (default) | Strict  |
 | -------------------------------------------- | -------------------- | ------- |
-| Wrong order or duplicates (**recoverable**)  | warn + normalize     | throw   |
+| Wrong alphabetical order or duplicates (**recoverable**)  | warn + normalize     | throw   |
 | Unknown flag name (**unrecoverable**)        | throw                | throw   |
 | Invalid characters, non-string input         | throw                | throw   |
 
@@ -237,7 +237,7 @@ const loose  = defineStringFlags<State>(["idle", "busy", "error", "blocked"]);
 const strict = defineStringFlags<State>(["idle", "busy", "error", "blocked"], { strict: true });
 
 loose.getFlags("busy,blocked");
-// warn: ... (not properly ordered); normalized to "blocked,busy"
+// warn: ... (not in alphabetical order); normalized to "blocked,busy"
 // returns ["blocked", "busy"]
 
 strict.getFlags("busy,blocked");
@@ -303,8 +303,8 @@ state.getFlags("blocked,busy");       // ["blocked", "busy"]
 state.getFlags("");                   // []
 
 state.getFlags("busy,blocked");
-// non-strict: warns (not properly ordered), returns ["blocked", "busy"]
-// strict:     throws
+// non-strict: warns (not in alphabetical order), returns ["blocked", "busy"]
+// strict:     throws (not in alphabetical order)
 
 state.getFlags("blocked,paused");     // throws: unknown flag
 ```
@@ -315,7 +315,7 @@ state.getFlags("blocked,paused");     // throws: unknown flag
 state.hasFlag("blocked,busy", "busy");    // true
 state.hasFlag("blocked,busy", "idle");    // false
 state.hasFlag("blocked", "paused");       // TS error: "paused" is not in State
-state.hasFlag("busy,blocked", "busy");    // non-strict: warns + returns true
+state.hasFlag("busy,blocked", "busy");    // non-strict: warns (not in alphabetical order) + returns true
 ```
 
 #### `hasAllFlags(input, required)` / `hasAnyFlag(input, candidates)`
@@ -363,7 +363,7 @@ state.isFlag("busy");                // true
 state.isFlag("paused");              // false
 
 state.isFlagsString("blocked,busy"); // true
-state.isFlagsString("busy,blocked"); // false — wrong order
+state.isFlagsString("busy,blocked"); // false — wrong alphabetical order
 state.isFlagsString("busy,busy");    // false — duplicate
 state.isFlagsString("paused");       // false — unknown flag
 ```
@@ -375,7 +375,7 @@ state.assertFlag("busy", "bad");                 // returns "busy"
 state.assertFlag("paused", "bad");               // throws "bad"
 
 state.assertFlagsString("blocked,busy", "bad");  // passes (and narrows the type)
-state.assertFlagsString("busy,blocked", "bad");  // throws "bad" — always strict
+state.assertFlagsString("busy,blocked", "bad");  // throws "bad" — wrong alphabetical order, always strict
 state.assertFlagsString("unknown", "bad");       // throws "bad"
 ```
 
@@ -399,8 +399,8 @@ parseStringFlags<State>("blocked,busy");        // ["blocked", "busy"]
 parseStringFlags<State>("");                    // []
 
 parseStringFlags<State>("busy,blocked");
-// non-strict: warns (not properly ordered), returns ["blocked", "busy"]
-// strict:     throws
+// non-strict: warns (not in alphabetical order), returns ["blocked", "busy"]
+// strict:     throws (not in alphabetical order)
 ```
 
 #### `hasStringFlag(input, flag, options?)`
@@ -408,7 +408,7 @@ parseStringFlags<State>("busy,blocked");
 ```ts
 hasStringFlag<State>("blocked,busy", "busy");   // true
 hasStringFlag<State>("blocked,busy", "idle");   // false
-hasStringFlag<State>("busy,blocked", "busy");   // non-strict: warns + true
+hasStringFlag<State>("busy,blocked", "busy");   // non-strict: warns (not in alphabetical order) + true
 ```
 
 #### `addStringFlag(input, flag, options?)`
@@ -431,7 +431,7 @@ removeStringFlag<State>("blocked", "busy");         // "blocked" — no-op
 ```ts
 toggleStringFlag<State>("", "idle");               // "idle"
 toggleStringFlag<State>("idle", "idle");           // ""
-toggleStringFlag<State>("idle,busy", "idle");      // non-strict: warns + "busy"
+toggleStringFlag<State>("idle,busy", "idle");      // non-strict: warns (not in alphabetical order) + "busy"
 ```
 
 ## Constraints

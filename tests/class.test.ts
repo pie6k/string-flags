@@ -129,10 +129,10 @@ describe("StringFlags (non-strict, protocol-violating input)", () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  it("warning cites wrong order when only order is off", () => {
+  it("warning cites wrong alphabetical order when only order is off", () => {
     schema.getFlags("busy,blocked" as FlagsString<State>);
     expect(warn).toHaveBeenCalledWith(
-      expect.stringMatching(/\(not properly ordered\)/),
+      expect.stringMatching(/\(not in alphabetical order\)/),
     );
   });
 
@@ -146,7 +146,7 @@ describe("StringFlags (non-strict, protocol-violating input)", () => {
   it("warning cites both when order and duplicates are both off", () => {
     schema.getFlags("busy,busy,blocked" as FlagsString<State>);
     expect(warn).toHaveBeenCalledWith(
-      expect.stringMatching(/\(not properly ordered and contains duplicates\)/),
+      expect.stringMatching(/\(not in alphabetical order and contains duplicates\)/),
     );
   });
 });
@@ -198,7 +198,7 @@ describe("StringFlags (strict mode)", () => {
     expect(schema.hasFlag("blocked,busy", "blocked")).toBe(true);
   });
 
-  it("throws on wrong order", () => {
+  it("throws on wrong alphabetical order", () => {
     expect(() =>
       schema.hasFlag("busy,blocked" as FlagsString<State>, "blocked"),
     ).toThrow(/does not follow the protocol/);

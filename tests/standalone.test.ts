@@ -88,7 +88,7 @@ describe("standalone helpers (strict mode)", () => {
   });
   afterEach(() => warn.mockRestore());
 
-  it("throws on wrong order", () => {
+  it("throws on wrong alphabetical order", () => {
     expect(() =>
       toggleStringFlag<State>(
         "busy,blocked" as FlagsString<State>,
