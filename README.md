@@ -43,35 +43,30 @@ Autocomplete lists every legal subset — the empty string, then singletons, pai
 ```ts
 import { defineStringFlags, type FlagsString } from "string-flags";
 
-type TaskState = "idle" | "busy" | "error" | "blocked";
+type Role = "admin" | "editor" | "viewer" | "suspended";
 
-const taskState = defineStringFlags<TaskState>(["idle", "busy", "error", "blocked"]);
+const roles = defineStringFlags<Role>(["admin", "editor", "viewer", "suspended"]);
 
-class Task {
-  state: FlagsString<TaskState> = "";
+class User {
+  constructor(public roles: FlagsString<Role> = "") {}
 
-  setState(next: FlagsString<TaskState>) {
-    // The argument is autocompleted: the IDE suggests every legal subset,
-    // and "busy,idle" / "busy,busy" / "paused" simply do not compile.
-    this.state = next;
-  }
-
-  performWork() {
-    if (taskState.hasFlag(this.state, "busy")) {
-      throw new Error("Task is already busy");
-    }
-    this.state = taskState.addFlag(this.state, "busy");
-    try {
-      // ... do the work ...
-    } finally {
-      this.state = taskState.removeFlag(this.state, "busy");
-    }
-  }
+  grant(role: Role)  { this.roles = roles.addFlag(this.roles, role); }
+  revoke(role: Role) { this.roles = roles.removeFlag(this.roles, role); }
+  isActive()         { return !roles.hasFlag(this.roles, "suspended"); }
+  canEdit()          { return this.isActive()
+                          && roles.hasAnyFlag(this.roles, ["admin", "editor"]); }
 }
 
-const task = new Task();
-task.setState("blocked,error");   // 🟢
-task.performWork();               // throws if "busy" is already in state
+// Validate anything you didn't type yourself.
+const fromDb: unknown = "editor,viewer";
+roles.assertFlagsString(fromDb, "invalid roles");
+const user = new User(fromDb);   // fromDb is now typed as FlagsString<Role>
+
+user.grant("admin");             // "admin,editor,viewer"
+user.canEdit();                  // true
+user.grant("suspended");
+user.canEdit();                  // false
+user.grant("moderator");         // 🔴 TS error — not a Role
 ```
 
 ## Install
