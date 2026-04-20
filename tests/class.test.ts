@@ -128,6 +128,27 @@ describe("StringFlags (non-strict, protocol-violating input)", () => {
     expect(schema.toggleFlag("idle,busy" as FlagsString<State>, "idle")).toBe("busy");
     expect(warn).toHaveBeenCalled();
   });
+
+  it("warning cites wrong order when only order is off", () => {
+    schema.getFlags("busy,blocked" as FlagsString<State>);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/\(not properly ordered\)/),
+    );
+  });
+
+  it("warning cites duplicates when the only problem is duplicates", () => {
+    schema.getFlags("busy,busy" as FlagsString<State>);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/\(contains duplicates\)/),
+    );
+  });
+
+  it("warning cites both when order and duplicates are both off", () => {
+    schema.getFlags("busy,busy,blocked" as FlagsString<State>);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/\(not properly ordered and contains duplicates\)/),
+    );
+  });
 });
 
 describe("StringFlags (unrecoverable input)", () => {

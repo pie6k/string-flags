@@ -22,9 +22,18 @@ function parse(input: unknown, context: string, strict: boolean): string[] {
   const segments = input.split(",");
   for (const s of segments) assertValidName(s, context);
 
-  const { normalized, wasAltered } = normalize(segments, lexCompare);
-  if (wasAltered) reportProtocolViolation(context, input, normalized.join(","), strict);
-  return normalized;
+  const result = normalize(segments, lexCompare);
+  if (result.wasAltered) {
+    reportProtocolViolation(
+      context,
+      input,
+      result.normalized.join(","),
+      strict,
+      result.wasReordered,
+      result.hadDuplicates,
+    );
+  }
+  return result.normalized;
 }
 
 /** Build a protocol-compliant flags string from an array. */

@@ -31,6 +31,8 @@ export function assertValidName(
 export interface NormalizeResult<T> {
   normalized: T[];
   wasAltered: boolean;
+  wasReordered: boolean;
+  hadDuplicates: boolean;
 }
 
 export function normalize<T>(
@@ -45,11 +47,18 @@ export function normalize<T>(
       deduped.push(item);
     }
   }
+  const hadDuplicates = deduped.length !== items.length;
   const normalized = [...deduped].sort(compare);
-  const wasAltered =
-    normalized.length !== items.length ||
-    normalized.some((item, i) => item !== items[i]);
-  return { normalized, wasAltered };
+  const wasReordered = normalized.some((item, i) => item !== deduped[i]);
+  const wasAltered = hadDuplicates || wasReordered;
+  return { normalized, wasAltered, wasReordered, hadDuplicates };
+}
+
+function describeReason(wasReordered: boolean, hadDuplicates: boolean): string {
+  const parts: string[] = [];
+  if (wasReordered) parts.push("not properly ordered");
+  if (hadDuplicates) parts.push("contains duplicates");
+  return parts.join(" and ");
 }
 
 export function reportProtocolViolation(
@@ -57,8 +66,11 @@ export function reportProtocolViolation(
   original: string,
   normalized: string,
   strict: boolean,
+  wasReordered: boolean,
+  hadDuplicates: boolean,
 ): void {
-  const message = `${context}: input ${JSON.stringify(original)} does not follow the protocol; normalized to ${JSON.stringify(normalized)}`;
+  const reason = describeReason(wasReordered, hadDuplicates);
+  const message = `${context}: input ${JSON.stringify(original)} does not follow the protocol (${reason}); normalized to ${JSON.stringify(normalized)}`;
   if (strict) throw new Error(message);
   console.warn(message);
 }

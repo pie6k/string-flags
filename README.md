@@ -25,20 +25,20 @@ hasStringFlag<State>(flags, "busy");               // true
 ```ts
 type State = "idle" | "busy" | "error" | "blocked";
 
-const a: FlagsString<State> = "";               // ✓ empty set
-const a1: FlagsString<State> = "busy";          // ✓ single flag
-const a2: FlagsString<State> = "blocked,busy";  // ✓ alphabetical
-const a3: FlagsString<State> = "blocked,busy,error,idle"; // ✓ full set
+const a: FlagsString<State> = "";                          // 🟢 empty set
+const a1: FlagsString<State> = "busy";                     // 🟢 single flag
+const a2: FlagsString<State> = "blocked,busy";             // 🟢 alphabetical
+const a3: FlagsString<State> = "blocked,busy,error,idle";  // 🟢 full set
 
-const b: FlagsString<State> = "busy,blocked";   // ✗ wrong order
-const c: FlagsString<State> = "busy,busy";      // ✗ duplicate
-const d: FlagsString<State> = "paused";         // ✗ unknown flag
-const e: FlagsString<State> = "blocked,";       // ✗ trailing comma
+const b: FlagsString<State> = "busy,blocked";              // 🔴 wrong order
+const c: FlagsString<State> = "busy,busy";                 // 🔴 duplicate
+const d: FlagsString<State> = "paused";                    // 🔴 unknown flag
+const e: FlagsString<State> = "blocked,";                  // 🔴 trailing comma
 ```
 
 Autocomplete lists every legal subset — the empty string, then singletons, pairs, triples, up to the full set. Typos do not compile. When a user edits a string by hand and puts the flags in the wrong order, the runtime normalizes the value and emits a warning (see [The protocol](#the-protocol) below).
 
-## A semi-real example
+## Example
 
 ```ts
 import { defineStringFlags, type FlagsString } from "string-flags";
@@ -70,7 +70,7 @@ class Task {
 }
 
 const task = new Task();
-task.setState("blocked,error");   // ✓
+task.setState("blocked,error");   // 🟢
 task.performWork();               // throws if "busy" is already in state
 ```
 
@@ -100,14 +100,12 @@ Bitmasks are great for computers. They are tricky for developers:
 - **Readable** in logs, URLs, database rows, and JSON payloads.
 - **Type-safe for single flags and for combinations.** `FlagsString<U>` is a finite union, not a string.
 - **Alphabetical autocomplete** on every legal subset — the IDE teaches the API as you type.
-- **Safe to diff.** `"busy,idle"` is always the same string; the library never produces `"idle,busy"`.
+- **Safe to diff.** Flags are always alphabetically ordered, so a given set has exactly one string form — you never see `"busy,idle"` in one place and `"idle,busy"` in another.
 - **Safe to extend.** Adding a flag does not reindex old data; old strings keep their meaning.
 
-## `defineStringFlags` — stricter, contained API
+## `defineStringFlags`
 
-The standalone helpers (`addStringFlag`, `toggleStringFlag`, …) work on any valid flag name. That is convenient for ad-hoc sets, but unknown flags can only be caught by TypeScript — there is no registered list.
-
-`defineStringFlags` gives you a single object that owns the exact list of allowed flags and rejects anything else at runtime:
+You can also define a schema with an explicit list of allowed flags and use it for strict, type-checked operations against that list.
 
 ```ts
 import { defineStringFlags, type FlagsString } from "string-flags";
@@ -132,7 +130,27 @@ state.isFlagsString("idle,busy");    // false — not in protocol form
 
 ### Exhaustive schemas with `Record<U, true>`
 
-The array form does not stop you from forgetting a new flag when you extend the union. The `Record<U, true>` form does:
+The `Record<U, true>` form is useful when you want the compiler to force the definition to stay in sync with the union.
+
+Consider the array form over time:
+
+```ts
+type State = "idle" | "busy" | "error" | "blocked";
+
+const state = defineStringFlags<State>(["idle", "busy", "error", "blocked"]);
+// 🟢 compiles
+```
+
+Later a teammate adds a new state:
+
+```ts
+type State = "idle" | "busy" | "error" | "blocked" | "paused";
+
+const state = defineStringFlags<State>(["idle", "busy", "error", "blocked"]);
+// 🔴 silently missing "paused" — TypeScript cannot catch this.
+```
+
+The `Record<U, true>` form does catch it:
 
 ```ts
 const state = defineStringFlags<State>({
@@ -140,60 +158,101 @@ const state = defineStringFlags<State>({
   busy: true,
   error: true,
   blocked: true,
+  // 🔴 TS error: Property 'paused' is missing in type '{...}'
+  //    but required in type 'Record<State, true>'.
 });
 ```
 
-Add `"paused"` to `State` and TypeScript will refuse to compile this object until you register it. Runtime behaviour is identical; pick the form that fits how you want to be warned.
-
 ## The protocol
 
-`string-flags` is designed for production use, with no undefined behaviour and no silent drift. The format every value follows is called _the protocol_.
+`string-flags` is designed for production use — no undefined behaviour, no silent drift. Every value the library produces or accepts follows a single format called _the protocol_.
 
 **The rules:**
 
-1. Flags are joined with a single comma `,`. **No whitespace.**
-2. The list is always in alphabetical order.
+1. Flags are joined with a single comma `,`. No whitespace.
+2. The list is always alphabetical.
 3. No duplicates.
 4. Flag names match `/^[a-zA-Z0-9]+$/` — no special characters.
 5. The empty string `""` is valid and means no flags.
 
-**The library is self-fixing.** Flag strings leak into places humans can edit — config files, database rows, URL parameters. When something comes back out of order or with duplicates, the library normalizes it and emits a `console.warn`. The returned value is always in protocol form.
+```ts
+// 🟢 valid
+""
+"busy"
+"blocked,busy"
+"blocked,busy,error,idle"
+
+// 🔴 invalid
+"busy,blocked"     // wrong order
+"busy, blocked"    // whitespace
+"busy,busy"        // duplicate
+"blocked,"         // trailing comma
+"my-flag"          // disallowed character
+```
+
+**The library is self-fixing.** Flag strings leak into places humans can edit — config files, database rows, URL parameters. When something comes back out of order or with duplicates, the library normalizes it and emits a `console.warn` that cites the specific reason. The returned value is always in protocol form.
+
+```ts
+state.getFlags("busy,blocked");
+// warn: input "busy,blocked" does not follow the protocol (not properly ordered);
+//       normalized to "blocked,busy"
+// returns ["blocked", "busy"]
+
+state.getFlags("busy,busy");
+// warn: input "busy,busy" does not follow the protocol (contains duplicates);
+//       normalized to "busy"
+
+state.getFlags("busy,busy,blocked");
+// warn: input "busy,busy,blocked" does not follow the protocol
+//       (not properly ordered and contains duplicates);
+//       normalized to "blocked,busy"
+```
 
 **The library is strict where self-fixing would be unsafe.** If a schema-based operation receives a flag it does not know about, it has no safe move:
 
 - Dropping the unknown flag silently would lose information — the caller meant it to be there.
-- Keeping the unknown flag would mean returning a `FlagsString<State>` that contains a non-`State` member. That is a lie to TypeScript, and it propagates undefined behaviour downstream.
+- Keeping it would mean returning a `FlagsString<State>` that contains a non-`State` member. That is a lie to TypeScript, and it propagates undefined behaviour downstream.
 
 So the library refuses to guess and throws. The same applies to invalid characters and non-string input.
 
+```ts
+state.getFlags("blocked,paused");
+// throws: unknown flag "paused"
+
+state.getFlags("blocked,my-flag");
+// throws: flag "my-flag" contains disallowed characters.
+```
+
 ## Strict mode
 
-Strict mode exists because recoverable problems like wrong order can still be bugs — if your database should only ever contain protocol-compliant strings, you want to know the moment one does not.
+Non-strict mode (the default) is for places where flag strings may have been hand-edited outside of type-controlled code — a database row, a config file, a URL parameter. The library self-fixes and warns.
+
+Strict mode is for places where you never hand-edit flags without type-control (i.e. an IDE with TypeScript). In that world, a protocol violation is always a bug, not a typo, and you want it to fail loudly.
+
+Either way, truly ambiguous input (unknown flag names, invalid characters, wrong type) always throws — strict mode only changes how **recoverable** problems are surfaced.
 
 | Situation                                    | Non-strict (default) | Strict  |
 | -------------------------------------------- | -------------------- | ------- |
-| Wrong order or duplicates (**recoverable**)   | warn + normalize     | throw   |
-| Unknown flag name (**unrecoverable**)         | throw                | throw   |
-| Invalid characters, non-string input          | throw                | throw   |
+| Wrong order or duplicates (**recoverable**)  | warn + normalize     | throw   |
+| Unknown flag name (**unrecoverable**)        | throw                | throw   |
+| Invalid characters, non-string input         | throw                | throw   |
 
 ```ts
 const loose  = defineStringFlags<State>(["idle", "busy", "error", "blocked"]);
 const strict = defineStringFlags<State>(["idle", "busy", "error", "blocked"], { strict: true });
 
 loose.getFlags("busy,blocked");
-// warn: input "busy,blocked" does not follow the protocol; normalized to "blocked,busy"
+// warn: ... (not properly ordered); normalized to "blocked,busy"
 // returns ["blocked", "busy"]
 
 strict.getFlags("busy,blocked");
 // throws the same message
 ```
 
-Rule of thumb: keep things non-strict inside your app, strict at trust boundaries (request bodies, external data).
-
 ### Assertions and type guards
 
 ```ts
-state.isFlagsString(value);                            // type guard, strict
+state.isFlagsString(value);                            // type guard, always strict
 state.assertFlagsString(value, "bad input");           // throws on protocol violation, always strict
 state.assertFlag(value, new BadRequestError("..."));   // returns U
 ```
@@ -212,44 +271,172 @@ type StringFlagsOptions = { strict?: boolean }
 type ErrorInput = string | Error
 ```
 
-### Schema
+### `defineStringFlags(input, options?)`
+
+Creates a `StringFlags<U>` schema from either an array or a `Record<U, true>`.
 
 ```ts
-defineStringFlags<U>(
-  input: readonly U[] | Record<U, true>,
-  options?: StringFlagsOptions,
-): StringFlags<U>
+defineStringFlags<State>(["idle", "busy", "error", "blocked"]);
+defineStringFlags<State>({ idle: true, busy: true, error: true, blocked: true });
+defineStringFlags<State>(["idle", "busy"], { strict: true });
 
-class StringFlags<U extends string> {
-  readonly flags: readonly U[];
-
-  toFlagsString(input: readonly U[]): FlagsString<U>;
-  getFlags(input: FlagsString<U>): U[];
-
-  hasFlag(input: FlagsString<U>, flag: U): boolean;
-  hasAllFlags(input: FlagsString<U>, required: readonly U[]): boolean;
-  hasAnyFlag(input: FlagsString<U>, candidates: readonly U[]): boolean;
-
-  addFlag(input: FlagsString<U>, flag: U): FlagsString<U>;
-  removeFlag(input: FlagsString<U>, flag: U): FlagsString<U>;
-  toggleFlag(input: FlagsString<U>, flag: U): FlagsString<U>;
-
-  isFlag(value: unknown): value is U;
-  isFlagsString(value: unknown): value is FlagsString<U>;
-  assertFlag(value: unknown, err: ErrorInput): U;
-  assertFlagsString(value: unknown, err: ErrorInput): asserts value is FlagsString<U>;
-}
+defineStringFlags<State>(["idle", "idle"]);         // throws: duplicate flag "idle"
+defineStringFlags<State>(["my-flag" as State]);     // throws: disallowed characters
 ```
 
-### Standalone
+### Schema methods
+
+All methods on a `StringFlags<U>` instance.
+
+#### `toFlagsString(input: readonly U[])`
+
+Build a protocol-compliant string from an array.
 
 ```ts
-toStringFlags<F>(flags: readonly F[]): FlagsString<F>;
-parseStringFlags<F>(input: FlagsString<F>, options?: StringFlagsOptions): F[];
-hasStringFlag<F>(input: FlagsString<F>, flag: F, options?): boolean;
-addStringFlag<F>(input: FlagsString<F>, flag: F, options?): FlagsString<F>;
-removeStringFlag<F>(input: FlagsString<F>, flag: F, options?): FlagsString<F>;
-toggleStringFlag<F>(input: FlagsString<F>, flag: F, options?): FlagsString<F>;
+state.toFlagsString(["busy", "blocked"]);        // "blocked,busy"
+state.toFlagsString(["busy", "busy", "idle"]);   // "busy,idle" — deduped
+state.toFlagsString([]);                         // ""
+state.toFlagsString(["paused" as State]);        // throws: unknown flag "paused"
+```
+
+#### `getFlags(input: FlagsString<U>)`
+
+Parse a flags string into an array. Normalizes in non-strict mode.
+
+```ts
+state.getFlags("blocked,busy");       // ["blocked", "busy"]
+state.getFlags("");                   // []
+
+state.getFlags("busy,blocked");
+// non-strict: warns (not properly ordered), returns ["blocked", "busy"]
+// strict:     throws
+
+state.getFlags("blocked,paused");     // throws: unknown flag
+```
+
+#### `hasFlag(input, flag)`
+
+```ts
+state.hasFlag("blocked,busy", "busy");    // true
+state.hasFlag("blocked,busy", "idle");    // false
+state.hasFlag("blocked", "paused");       // TS error: "paused" is not in State
+state.hasFlag("busy,blocked", "busy");    // non-strict: warns + returns true
+```
+
+#### `hasAllFlags(input, required)` / `hasAnyFlag(input, candidates)`
+
+```ts
+state.hasAllFlags("blocked,busy,idle", ["busy", "idle"]);   // true
+state.hasAllFlags("blocked,busy", ["busy", "idle"]);        // false
+
+state.hasAnyFlag("blocked", ["idle", "blocked"]);           // true
+state.hasAnyFlag("blocked", ["idle", "busy"]);              // false
+```
+
+#### `addFlag(input, flag)`
+
+```ts
+state.addFlag("", "idle");              // "idle"
+state.addFlag("blocked", "busy");       // "blocked,busy"
+state.addFlag("blocked,busy", "busy");  // "blocked,busy" — idempotent
+state.addFlag("", "paused");            // TS error: "paused" is not in State
+```
+
+#### `removeFlag(input, flag)`
+
+```ts
+state.removeFlag("blocked,busy", "blocked");  // "busy"
+state.removeFlag("blocked", "busy");          // "blocked" — no-op
+state.removeFlag("idle", "idle");             // "" — back to empty
+```
+
+#### `toggleFlag(input, flag)`
+
+```ts
+state.toggleFlag("", "idle");             // "idle"
+state.toggleFlag("idle", "idle");         // ""
+state.toggleFlag("blocked", "busy");      // "blocked,busy"
+state.toggleFlag("blocked,busy", "busy"); // "blocked"
+```
+
+#### `isFlag(value)` / `isFlagsString(value)`
+
+Type guards. Both are strict predicates — they answer "is this exactly a valid value?" without normalizing.
+
+```ts
+state.isFlag("busy");                // true
+state.isFlag("paused");              // false
+
+state.isFlagsString("blocked,busy"); // true
+state.isFlagsString("busy,blocked"); // false — wrong order
+state.isFlagsString("busy,busy");    // false — duplicate
+state.isFlagsString("paused");       // false — unknown flag
+```
+
+#### `assertFlag(value, err)` / `assertFlagsString(value, err)`
+
+```ts
+state.assertFlag("busy", "bad");                 // returns "busy"
+state.assertFlag("paused", "bad");               // throws "bad"
+
+state.assertFlagsString("blocked,busy", "bad");  // passes (and narrows the type)
+state.assertFlagsString("busy,blocked", "bad");  // throws "bad" — always strict
+state.assertFlagsString("unknown", "bad");       // throws "bad"
+```
+
+### Standalone helpers
+
+Same semantics as the schema methods, but with no registered list — unknown flag detection is delegated to TypeScript. All accept an optional `{ strict?: boolean }` second argument.
+
+#### `toStringFlags(flags)`
+
+```ts
+toStringFlags<State>(["busy", "blocked"]);      // "blocked,busy"
+toStringFlags<State>(["busy", "busy"]);         // "busy" — deduped
+toStringFlags<State>([]);                       // ""
+toStringFlags(["bad;"]);                        // throws: disallowed characters
+```
+
+#### `parseStringFlags(input, options?)`
+
+```ts
+parseStringFlags<State>("blocked,busy");        // ["blocked", "busy"]
+parseStringFlags<State>("");                    // []
+
+parseStringFlags<State>("busy,blocked");
+// non-strict: warns (not properly ordered), returns ["blocked", "busy"]
+// strict:     throws
+```
+
+#### `hasStringFlag(input, flag, options?)`
+
+```ts
+hasStringFlag<State>("blocked,busy", "busy");   // true
+hasStringFlag<State>("blocked,busy", "idle");   // false
+hasStringFlag<State>("busy,blocked", "busy");   // non-strict: warns + true
+```
+
+#### `addStringFlag(input, flag, options?)`
+
+```ts
+addStringFlag<State>("", "idle");                // "idle"
+addStringFlag<State>("blocked", "busy");         // "blocked,busy"
+addStringFlag<State>("blocked,busy", "busy");    // "blocked,busy"
+```
+
+#### `removeStringFlag(input, flag, options?)`
+
+```ts
+removeStringFlag<State>("blocked,busy", "blocked"); // "busy"
+removeStringFlag<State>("blocked", "busy");         // "blocked" — no-op
+```
+
+#### `toggleStringFlag(input, flag, options?)`
+
+```ts
+toggleStringFlag<State>("", "idle");               // "idle"
+toggleStringFlag<State>("idle", "idle");           // ""
+toggleStringFlag<State>("idle,busy", "idle");      // non-strict: warns + "busy"
 ```
 
 ## Constraints

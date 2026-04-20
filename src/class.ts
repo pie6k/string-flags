@@ -59,9 +59,18 @@ export class StringFlags<U extends string> {
     const segments = input.split(",") as U[];
     for (const s of segments) this.assertKnown(s, context);
 
-    const { normalized, wasAltered } = normalize(segments, this.compareByIndex);
-    if (wasAltered) reportProtocolViolation(context, input, normalized.join(","), this.strict);
-    return normalized;
+    const result = normalize(segments, this.compareByIndex);
+    if (result.wasAltered) {
+      reportProtocolViolation(
+        context,
+        input,
+        result.normalized.join(","),
+        this.strict,
+        result.wasReordered,
+        result.hadDuplicates,
+      );
+    }
+    return result.normalized;
   }
 
   /** Build a protocol-compliant flags string from any order or duplication. */
