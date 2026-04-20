@@ -20,7 +20,7 @@ hasStringFlag<State>(flags, "busy");               // true
 
 ## Type-safe and autocompletable
 
-`FlagsString<U>` is not a generic string. TypeScript knows the exact set of legal values and enforces the protocol at compile time.
+`FlagsString<U>` is not a generic string — it's a type-safe union of every legal, alphabetically ordered combination of your flags, with full type checking and autocomplete. TypeScript enforces the protocol at compile time, so non-compliant values simply do not type-check.
 
 ```ts
 type State = "idle" | "busy" | "error" | "blocked";
