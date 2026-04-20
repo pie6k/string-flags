@@ -1,0 +1,63 @@
+{
+  "name": "string-flags",
+  "version": "0.1.0",
+  "description": "Developer-friendly, production-ready, human-readable alternative to binary flags.",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
+    "release:patch": "npm version patch && npm publish",
+    "release:minor": "npm version minor && npm publish",
+    "release:major": "npm version major && npm publish"
+  },
+  "keywords": [
+    "flags",
+    "bitmask",
+    "bitfield",
+    "string-flags",
+    "enum",
+    "typescript",
+    "state"
+  ],
+  "author": "Adam Pietrasiak <adam@pietrasiak.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pietrasiak/string-flags.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pietrasiak/string-flags/issues"
+  },
+  "homepage": "https://github.com/pietrasiak/string-flags#readme",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0",
+    "vite-plugin-dts": "^3.8.0"
+  }
+}

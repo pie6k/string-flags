@@ -1,0 +1,9 @@
+src
+tests
+coverage
+node_modules
+tsconfig*.json
+jest.config.cjs
+vite.config.ts
+.gitignore
+*.log
