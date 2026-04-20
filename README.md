@@ -2,6 +2,8 @@
 
 **Developer-friendly, production-ready, human-readable alternative to binary flags.**
 
+![Demo screenshot](demo.png)
+
 Store a set of flags in a single string, keep it in a strict, self-healing protocol form, and get full TypeScript autocomplete on every legal subset.
 
 ```ts
