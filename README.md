@@ -81,7 +81,7 @@ Requires Node 18+ and TypeScript 5+.
 
 ## Why not bitmasks?
 
-Bitmasks are great for computers. They are tricky for developers:
+Bitmasks are great for computers. They are tricky for humans — even developers familiar with binary numbers:
 
 - **Opaque.** You cannot understand what `5` means without looking up the mask definition.
 - **Not how we think.** Even when you know the flags, you think in names (`"busy"`, `"blocked"`), not in bits.
