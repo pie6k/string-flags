@@ -2,7 +2,7 @@
 
 **Developer-friendly, production-ready, human-readable alternative to binary flags.**
 
-Store a set of flags in a single string, keep it in a strict, self-healing protocol form, and get full TypeScript autocomplete on every subset.
+Store a set of flags in a single string, keep it in a strict, self-healing protocol form, and get full TypeScript autocomplete on every legal subset.
 
 ```ts
 import { addStringFlag, toggleStringFlag, hasStringFlag, type FlagsString } from "string-flags";
@@ -18,6 +18,62 @@ flags = toggleStringFlag<State>(flags, "busy");    // "blocked,busy"
 hasStringFlag<State>(flags, "busy");               // true
 ```
 
+## Type-safe and autocompletable
+
+`FlagsString<U>` is not a generic string. TypeScript knows the exact set of legal values and enforces the protocol at compile time.
+
+```ts
+type State = "idle" | "busy" | "error" | "blocked";
+
+const a: FlagsString<State> = "";               // ✓ empty set
+const a1: FlagsString<State> = "busy";          // ✓ single flag
+const a2: FlagsString<State> = "blocked,busy";  // ✓ alphabetical
+const a3: FlagsString<State> = "blocked,busy,error,idle"; // ✓ full set
+
+const b: FlagsString<State> = "busy,blocked";   // ✗ wrong order
+const c: FlagsString<State> = "busy,busy";      // ✗ duplicate
+const d: FlagsString<State> = "paused";         // ✗ unknown flag
+const e: FlagsString<State> = "blocked,";       // ✗ trailing comma
+```
+
+Autocomplete lists every legal subset — the empty string, then singletons, pairs, triples, up to the full set. Typos do not compile. When a user edits a string by hand and puts the flags in the wrong order, the runtime normalizes the value and emits a warning (see [The protocol](#the-protocol) below).
+
+## A semi-real example
+
+```ts
+import { defineStringFlags, type FlagsString } from "string-flags";
+
+type TaskState = "idle" | "busy" | "error" | "blocked";
+
+const taskState = defineStringFlags<TaskState>(["idle", "busy", "error", "blocked"]);
+
+class Task {
+  state: FlagsString<TaskState> = "";
+
+  setState(next: FlagsString<TaskState>) {
+    // The argument is autocompleted: the IDE suggests every legal subset,
+    // and "busy,idle" / "busy,busy" / "paused" simply do not compile.
+    this.state = next;
+  }
+
+  performWork() {
+    if (taskState.hasFlag(this.state, "busy")) {
+      throw new Error("Task is already busy");
+    }
+    this.state = taskState.addFlag(this.state, "busy");
+    try {
+      // ... do the work ...
+    } finally {
+      this.state = taskState.removeFlag(this.state, "busy");
+    }
+  }
+}
+
+const task = new Task();
+task.setState("blocked,error");   // ✓
+task.performWork();               // throws if "busy" is already in state
+```
+
 ## Install
 
 ```bash
@@ -30,68 +86,28 @@ Requires Node 18+ and TypeScript 5+.
 
 ## Why not bitmasks?
 
-Bitmasks are fast and compact. They are also opaque: `5` means nothing without the constants, they are a pain to inspect in logs and databases, and adding a flag requires a migration of every integer ever stored.
+Bitmasks are great for computers. They are tricky for developers:
 
-`string-flags` stores the same information as a readable, protocol-compliant string:
+- **Opaque.** You cannot understand what `5` means without looking up the mask definition.
+- **Not how we think.** Even when you know the flags, you think in names (`"busy"`, `"blocked"`), not in bits.
+- **Hard for humans to edit.** A database row that says `blocked,idle` is obvious to a non-technical user. `5` is not.
+- **Import everywhere.** Anywhere you want to check a bit, you have to import the enum of masks.
+- **Awkward syntax.** `|`, `&`, `^`, `~`, `&=`, `<<`, `>>` — correct, but uncommon in everyday JavaScript.
+- **No help from the compiler on combinations.** `BUSY | IDLE` is just a `number`; TypeScript cannot tell you which combinations are meaningful.
 
-| Bitmask      | string-flags       |
-| ------------ | ------------------ |
-| `5`          | `"blocked,idle"`   |
-| `0`          | `""`               |
-| `BUSY\|IDLE` | `"busy,idle"`      |
+`string-flags` addresses all of these:
 
-- Readable in logs, database rows, URLs, and JSON payloads.
-- Safe to diff — `"busy,idle"` is always the same string, never `"idle,busy"`.
-- Type-checked — the set of valid strings is a finite union that TypeScript autocompletes.
-- Safe to extend — adding a new flag does not reindex existing data.
+- **Readable** in logs, URLs, database rows, and JSON payloads.
+- **Type-safe for single flags and for combinations.** `FlagsString<U>` is a finite union, not a string.
+- **Alphabetical autocomplete** on every legal subset — the IDE teaches the API as you type.
+- **Safe to diff.** `"busy,idle"` is always the same string; the library never produces `"idle,busy"`.
+- **Safe to extend.** Adding a flag does not reindex old data; old strings keep their meaning.
 
-## The protocol
+## `defineStringFlags` — stricter, contained API
 
-A flags string follows a single, strict protocol:
+The standalone helpers (`addStringFlag`, `toggleStringFlag`, …) work on any valid flag name. That is convenient for ad-hoc sets, but unknown flags can only be caught by TypeScript — there is no registered list.
 
-1. A comma-separated list of flag names matching `/^[a-zA-Z0-9]+$/`.
-2. Sorted alphabetically.
-3. With no duplicates.
-4. Or the empty string `""` for the empty set.
-
-The library only ever **produces** strings in this form, and operations **expect** inputs in this form.
-
-**It is self-healing.** In the real world, flag strings leak into places humans can edit — config files, database rows, URL params. When something comes back to the library out of order or with duplicates, you always find out:
-
-- In non-strict mode (default), the library emits a `console.warn` and normalizes the input — every operation still returns a protocol-compliant string.
-- In strict mode, the library throws instead.
-
-Either way, protocol violations are never silent.
-
-## Basic usage (schema-less helpers)
-
-The standalone helpers work on any valid flag name. Pass the flag union explicitly as a type argument so TypeScript catches typos at the call site:
-
-```ts
-import {
-  addStringFlag,
-  removeStringFlag,
-  toggleStringFlag,
-  hasStringFlag,
-  parseStringFlags,
-  toStringFlags,
-  type FlagsString,
-} from "string-flags";
-
-type State = "idle" | "busy" | "error" | "blocked";
-
-let s: FlagsString<State> = "";
-s = addStringFlag<State>(s, "idle");
-s = toggleStringFlag<State>(s, "busy");   // "busy,idle"
-hasStringFlag<State>(s, "busy");          // true
-parseStringFlags<State>(s);               // ["busy", "idle"]
-```
-
-Because there is no registered schema, unknown flag names cannot be detected at runtime — TypeScript is the only guard. That is usually enough, and it keeps the call site trivial.
-
-## Schema-based API
-
-If you want a single object that owns the list of allowed flags and rejects anything else at runtime, define a schema.
+`defineStringFlags` gives you a single object that owns the exact list of allowed flags and rejects anything else at runtime:
 
 ```ts
 import { defineStringFlags, type FlagsString } from "string-flags";
@@ -109,16 +125,14 @@ state.hasFlag(s, "blocked");         // true
 state.hasAllFlags(s, ["blocked"]);   // true
 state.getFlags(s);                   // ["blocked"]
 
+state.isFlag("busy");                // true
 state.isFlagsString("busy,idle");    // true
 state.isFlagsString("idle,busy");    // false — not in protocol form
-state.isFlag("busy");                // true
 ```
-
-The schema rejects unknown flags anywhere they appear (method arguments, parsed strings), so you get a single failure mode instead of quietly doing the wrong thing.
 
 ### Exhaustive schemas with `Record<U, true>`
 
-The array form is easy to read but does not stop you from forgetting a new flag when you extend the union. The `Record<U, true>` form does:
+The array form does not stop you from forgetting a new flag when you extend the union. The `Record<U, true>` form does:
 
 ```ts
 const state = defineStringFlags<State>({
@@ -129,17 +143,38 @@ const state = defineStringFlags<State>({
 });
 ```
 
-Now if someone adds `"paused"` to `State`, TypeScript will complain that `paused` is missing from the definition. Runtime behaviour is identical — pick the form that fits how you want to be warned.
+Add `"paused"` to `State` and TypeScript will refuse to compile this object until you register it. Runtime behaviour is identical; pick the form that fits how you want to be warned.
+
+## The protocol
+
+`string-flags` is designed for production use, with no undefined behaviour and no silent drift. The format every value follows is called _the protocol_.
+
+**The rules:**
+
+1. Flags are joined with a single comma `,`. **No whitespace.**
+2. The list is always in alphabetical order.
+3. No duplicates.
+4. Flag names match `/^[a-zA-Z0-9]+$/` — no special characters.
+5. The empty string `""` is valid and means no flags.
+
+**The library is self-fixing.** Flag strings leak into places humans can edit — config files, database rows, URL parameters. When something comes back out of order or with duplicates, the library normalizes it and emits a `console.warn`. The returned value is always in protocol form.
+
+**The library is strict where self-fixing would be unsafe.** If a schema-based operation receives a flag it does not know about, it has no safe move:
+
+- Dropping the unknown flag silently would lose information — the caller meant it to be there.
+- Keeping the unknown flag would mean returning a `FlagsString<State>` that contains a non-`State` member. That is a lie to TypeScript, and it propagates undefined behaviour downstream.
+
+So the library refuses to guess and throws. The same applies to invalid characters and non-string input.
 
 ## Strict mode
 
-Every operation that can detect a problem does exactly one of three things:
+Strict mode exists because recoverable problems like wrong order can still be bugs — if your database should only ever contain protocol-compliant strings, you want to know the moment one does not.
 
-| Situation                                  | Non-strict (default) | Strict  |
-| ------------------------------------------ | -------------------- | ------- |
-| Wrong order or duplicates (**recoverable**) | warn + normalize     | throw   |
-| Unknown flag name (**unrecoverable**)       | throw                | throw   |
-| Invalid characters, non-string input        | throw                | throw   |
+| Situation                                    | Non-strict (default) | Strict  |
+| -------------------------------------------- | -------------------- | ------- |
+| Wrong order or duplicates (**recoverable**)   | warn + normalize     | throw   |
+| Unknown flag name (**unrecoverable**)         | throw                | throw   |
+| Invalid characters, non-string input          | throw                | throw   |
 
 ```ts
 const loose  = defineStringFlags<State>(["idle", "busy", "error", "blocked"]);
@@ -152,13 +187,6 @@ loose.getFlags("busy,blocked");
 strict.getFlags("busy,blocked");
 // throws the same message
 ```
-
-**Why unknown flags always throw** — even in non-strict mode. If your schema only knows `idle | busy | error | blocked`, and something passes `"blocked,paused"`, the library has no safe move:
-
-- Dropping `paused` silently would lose information. The caller clearly meant for it to be there.
-- Keeping it would mean returning a `FlagsString<State>` that contains a non-`State` member — a lie to TypeScript that would propagate undefined behaviour downstream.
-
-So the library refuses to guess and throws. Strict mode only changes how **recoverable** problems are surfaced.
 
 Rule of thumb: keep things non-strict inside your app, strict at trust boundaries (request bodies, external data).
 
