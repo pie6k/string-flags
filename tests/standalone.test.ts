@@ -10,7 +10,7 @@ import {
 
 type State = "idle" | "busy" | "error" | "blocked";
 
-describe("standalone helpers (canonical input)", () => {
+describe("standalone helpers (protocol-compliant input)", () => {
   let warn: jest.SpyInstance;
   beforeEach(() => {
     warn = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -38,14 +38,14 @@ describe("standalone helpers (canonical input)", () => {
     expect(toggleStringFlag<State>("", "idle")).toBe("idle");
   });
 
-  it("does not warn on canonical input", () => {
+  it("does not warn on protocol-compliant input", () => {
     addStringFlag<State>("blocked", "busy");
     toggleStringFlag<State>("blocked,busy", "idle");
     expect(warn).not.toHaveBeenCalled();
   });
 });
 
-describe("standalone helpers (non-canonical input)", () => {
+describe("standalone helpers (protocol-violating input)", () => {
   let warn: jest.SpyInstance;
   beforeEach(() => {
     warn = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -56,14 +56,14 @@ describe("standalone helpers (non-canonical input)", () => {
     expect(
       toggleStringFlag<State>("busy,blocked" as FlagsString<State>, "idle"),
     ).toBe("blocked,busy,idle");
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/was not canonical/));
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/does not follow the protocol/));
   });
 
   it("warns and normalizes on the idle,busy case", () => {
     expect(
       toggleStringFlag<State>("idle,busy" as FlagsString<State>, "idle"),
     ).toBe("busy");
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/was not canonical/));
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/does not follow the protocol/));
   });
 
   it("dedupes and sorts in add", () => {
@@ -88,20 +88,20 @@ describe("standalone helpers (strict mode)", () => {
   });
   afterEach(() => warn.mockRestore());
 
-  it("throws on non-canonical input", () => {
+  it("throws on wrong order", () => {
     expect(() =>
       toggleStringFlag<State>(
         "busy,blocked" as FlagsString<State>,
         "idle",
         { strict: true },
       ),
-    ).toThrow(/was not canonical/);
+    ).toThrow(/does not follow the protocol/);
   });
 
   it("throws on duplicates", () => {
     expect(() =>
       addStringFlag("foo,foo" as FlagsString<string>, "bar", { strict: true }),
-    ).toThrow(/was not canonical/);
+    ).toThrow(/does not follow the protocol/);
   });
 
   it("does not warn when throwing", () => {

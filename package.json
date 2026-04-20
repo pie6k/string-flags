@@ -1,6 +1,6 @@
 {
   "name": "string-flags",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Developer-friendly, production-ready, human-readable alternative to binary flags.",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",

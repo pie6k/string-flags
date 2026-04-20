@@ -12,7 +12,7 @@ const pair: StateFlags = "blocked,busy";
 const triple: StateFlags = "blocked,busy,error";
 const full: StateFlags = "blocked,busy,error,idle";
 
-// @ts-expect-error — non-canonical order
+// @ts-expect-error — wrong order (protocol violation)
 const _nonCanonical: StateFlags = "busy,blocked";
 // @ts-expect-error — duplicate flag
 const _duplicate: StateFlags = "blocked,blocked";

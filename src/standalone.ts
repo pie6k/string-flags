@@ -2,14 +2,15 @@ import type { FlagsString } from "./types";
 import {
   assert,
   assertValidName,
-  canonicalize,
   lexCompare,
-  reportNonCanonical,
+  normalize,
+  reportProtocolViolation,
   StringFlagsOptions,
 } from "./internal";
 
-// Schema-less helpers. These enforce character validity and canonical
-// ordering, but cannot detect "unknown" flags — there is no reference set.
+// Schema-less helpers. They enforce the protocol (character validity,
+// alphabetical order, no duplicates) but cannot detect "unknown" flags
+// because there is no reference set.
 //
 // Pass the flag union explicitly for a safer call site:
 //   toggleStringFlag<State>(current, "idle")
@@ -21,17 +22,17 @@ function parse(input: unknown, context: string, strict: boolean): string[] {
   const segments = input.split(",");
   for (const s of segments) assertValidName(s, context);
 
-  const { canonical, wasAltered } = canonicalize(segments, lexCompare);
-  if (wasAltered) reportNonCanonical(context, input, canonical.join(","), strict);
-  return canonical;
+  const { normalized, wasAltered } = normalize(segments, lexCompare);
+  if (wasAltered) reportProtocolViolation(context, input, normalized.join(","), strict);
+  return normalized;
 }
 
-/** Canonicalize an array into a flags string. */
+/** Build a protocol-compliant flags string from an array. */
 export function toStringFlags<F extends string>(flags: readonly F[]): FlagsString<F> {
   assert(Array.isArray(flags), "toStringFlags: expected an array");
   for (const f of flags) assertValidName(f, "toStringFlags");
-  const { canonical } = canonicalize(flags, lexCompare);
-  return canonical.join(",") as FlagsString<F>;
+  const { normalized } = normalize(flags, lexCompare);
+  return normalized.join(",") as FlagsString<F>;
 }
 
 /** Parse a flags string into an array. Normalizes in non-strict mode. */

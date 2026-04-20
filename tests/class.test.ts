@@ -9,7 +9,7 @@ function makeSchema(strict = false): StringFlags<State> {
   );
 }
 
-describe("StringFlags (non-strict, canonical input)", () => {
+describe("StringFlags (non-strict, protocol-compliant input)", () => {
   const schema = makeSchema();
   let warn: jest.SpyInstance;
 
@@ -79,7 +79,7 @@ describe("StringFlags (non-strict, canonical input)", () => {
   });
 });
 
-describe("StringFlags (non-strict, non-canonical input)", () => {
+describe("StringFlags (non-strict, protocol-violating input)", () => {
   const schema = makeSchema();
   let warn: jest.SpyInstance;
 
@@ -91,7 +91,7 @@ describe("StringFlags (non-strict, non-canonical input)", () => {
   it("hasFlag warns and recovers on swapped order", () => {
     expect(schema.hasFlag("busy,blocked" as FlagsString<State>, "blocked")).toBe(true);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toMatch(/was not canonical/);
+    expect(warn.mock.calls[0][0]).toMatch(/does not follow the protocol/);
   });
 
   it("getFlags normalizes swapped order", () => {
@@ -173,26 +173,26 @@ describe("StringFlags (strict mode)", () => {
   });
   afterEach(() => warn.mockRestore());
 
-  it("accepts canonical input", () => {
+  it("accepts protocol-compliant input", () => {
     expect(schema.hasFlag("blocked,busy", "blocked")).toBe(true);
   });
 
-  it("throws on non-canonical order", () => {
+  it("throws on wrong order", () => {
     expect(() =>
       schema.hasFlag("busy,blocked" as FlagsString<State>, "blocked"),
-    ).toThrow(/was not canonical/);
+    ).toThrow(/does not follow the protocol/);
   });
 
   it("throws on duplicates", () => {
     expect(() =>
       schema.getFlags("busy,busy,blocked" as FlagsString<State>),
-    ).toThrow(/was not canonical/);
+    ).toThrow(/does not follow the protocol/);
   });
 
   it("throws from mutations", () => {
     expect(() =>
       schema.addFlag("busy,blocked" as FlagsString<State>, "idle"),
-    ).toThrow(/was not canonical/);
+    ).toThrow(/does not follow the protocol/);
   });
 
   it("does not emit warnings when it throws", () => {
@@ -218,14 +218,14 @@ describe("isFlag / isFlagsString", () => {
     expect(schema.isFlag(null)).toBe(false);
   });
 
-  it("isFlagsString accepts canonical values", () => {
+  it("isFlagsString accepts protocol-compliant values", () => {
     expect(schema.isFlagsString("")).toBe(true);
     expect(schema.isFlagsString("blocked")).toBe(true);
     expect(schema.isFlagsString("blocked,busy")).toBe(true);
     expect(schema.isFlagsString("blocked,busy,error,idle")).toBe(true);
   });
 
-  it("isFlagsString rejects non-canonical or invalid values", () => {
+  it("isFlagsString rejects protocol-violating or invalid values", () => {
     expect(schema.isFlagsString("busy,blocked")).toBe(false);
     expect(schema.isFlagsString("blocked,blocked")).toBe(false);
     expect(schema.isFlagsString("blocked,unknown")).toBe(false);
@@ -236,12 +236,12 @@ describe("isFlag / isFlagsString", () => {
 describe("assertFlagsString / assertFlag", () => {
   const schema = makeSchema();
 
-  it("assertFlagsString passes through a canonical value", () => {
+  it("assertFlagsString passes through a protocol-compliant value", () => {
     const v: unknown = "blocked,busy";
     expect(() => schema.assertFlagsString(v, "bad")).not.toThrow();
   });
 
-  it("assertFlagsString is strict regardless of schema strictness", () => {
+  it("assertFlagsString is strict regardless of the schema's strict mode", () => {
     expect(() =>
       schema.assertFlagsString("busy,blocked", "bad"),
     ).toThrow(/bad/);
@@ -275,7 +275,7 @@ describe("assertFlagsString / assertFlag", () => {
 });
 
 describe("realistic usage", () => {
-  it("toggling flags on a wrapper object keeps the string canonical", () => {
+  it("toggling flags on a wrapper object keeps the string in protocol form", () => {
     const schema = makeSchema();
 
     class Item {

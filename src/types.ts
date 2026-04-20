@@ -1,7 +1,7 @@
 // Type-level machinery for FlagsString<U>.
 //
-// Given a string-literal union U, FlagsString<U> is the set of all
-// canonical (alphabetically sorted, deduplicated) comma-joined subsets.
+// Given a string-literal union U, FlagsString<U> is the set of every
+// protocol-compliant (alphabetical, deduplicated) comma-joined subset.
 // Empty string represents no flags.
 //
 // Autocomplete surfaces shorter subsets first (singletons, then pairs, ...).
@@ -89,7 +89,7 @@ type PowerSet<
   : SubsetsOfSize<Members, Size> | PowerSet<Members, [unknown, ...Size]>;
 
 /**
- * Canonical flags string built from a union of flag names.
+ * Protocol-compliant flags string built from a union of flag names.
  *
  * - `""` means no flags.
  * - Non-empty values are alphabetical and deduplicated.

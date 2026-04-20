@@ -28,15 +28,15 @@ export function assertValidName(
   );
 }
 
-export interface CanonicalResult<T> {
-  canonical: T[];
+export interface NormalizeResult<T> {
+  normalized: T[];
   wasAltered: boolean;
 }
 
-export function canonicalize<T>(
+export function normalize<T>(
   items: readonly T[],
   compare: (a: T, b: T) => number,
-): CanonicalResult<T> {
+): NormalizeResult<T> {
   const seen = new Set<T>();
   const deduped: T[] = [];
   for (const item of items) {
@@ -45,20 +45,20 @@ export function canonicalize<T>(
       deduped.push(item);
     }
   }
-  const canonical = [...deduped].sort(compare);
+  const normalized = [...deduped].sort(compare);
   const wasAltered =
-    canonical.length !== items.length ||
-    canonical.some((item, i) => item !== items[i]);
-  return { canonical, wasAltered };
+    normalized.length !== items.length ||
+    normalized.some((item, i) => item !== items[i]);
+  return { normalized, wasAltered };
 }
 
-export function reportNonCanonical(
+export function reportProtocolViolation(
   context: string,
   original: string,
   normalized: string,
   strict: boolean,
 ): void {
-  const message = `${context}: input ${JSON.stringify(original)} was not canonical; normalized to ${JSON.stringify(normalized)}`;
+  const message = `${context}: input ${JSON.stringify(original)} does not follow the protocol; normalized to ${JSON.stringify(normalized)}`;
   if (strict) throw new Error(message);
   console.warn(message);
 }
@@ -68,9 +68,9 @@ export const lexCompare = (a: string, b: string): number =>
 
 export interface StringFlagsOptions {
   /**
-   * When true, non-canonical input (duplicates, wrong order) throws.
-   * When false (default), it is normalized and a warning is emitted on
-   * `console.warn`. Unknown flags and invalid characters always throw
+   * When true, input that violates the protocol (duplicates, wrong order)
+   * throws. When false (default), it is normalized and a warning is emitted
+   * on `console.warn`. Unknown flags and invalid characters always throw,
    * regardless of this setting.
    */
   strict?: boolean;

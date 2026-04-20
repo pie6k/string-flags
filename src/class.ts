@@ -2,10 +2,10 @@ import type { FlagsString } from "./types";
 import {
   assert,
   assertValidName,
-  canonicalize,
   ErrorInput,
   MAX_FLAGS,
-  reportNonCanonical,
+  normalize,
+  reportProtocolViolation,
   resolveErrorInput,
   StringFlagsOptions,
 } from "./internal";
@@ -50,7 +50,7 @@ export class StringFlags<U extends string> {
   }
 
   // Parses a flags string into an array of known flags. Unknown flags and
-  // non-string inputs always throw. Non-canonical input warns or throws
+  // non-string inputs always throw. Protocol violations warn or throw
   // depending on strict mode.
   private parse(input: unknown, context: string): U[] {
     assert(typeof input === "string", `${context}: expected a string (got ${String(input)})`);
@@ -59,17 +59,17 @@ export class StringFlags<U extends string> {
     const segments = input.split(",") as U[];
     for (const s of segments) this.assertKnown(s, context);
 
-    const { canonical, wasAltered } = canonicalize(segments, this.compareByIndex);
-    if (wasAltered) reportNonCanonical(context, input, canonical.join(","), this.strict);
-    return canonical;
+    const { normalized, wasAltered } = normalize(segments, this.compareByIndex);
+    if (wasAltered) reportProtocolViolation(context, input, normalized.join(","), this.strict);
+    return normalized;
   }
 
-  /** Build a canonical flags string from any order or duplication. */
+  /** Build a protocol-compliant flags string from any order or duplication. */
   toFlagsString(input: readonly U[]): FlagsString<U> {
     assert(Array.isArray(input), "StringFlags.toFlagsString: expected an array");
     for (const f of input) this.assertKnown(f, "StringFlags.toFlagsString");
-    const { canonical } = canonicalize(input, this.compareByIndex);
-    return canonical.join(",") as FlagsString<U>;
+    const { normalized } = normalize(input, this.compareByIndex);
+    return normalized.join(",") as FlagsString<U>;
   }
 
   /** Parse a flags string into an array. Normalizes in non-strict mode. */
@@ -122,8 +122,8 @@ export class StringFlags<U extends string> {
   }
 
   /**
-   * Is `value` a canonical flags string? Strict predicate — returns false
-   * for non-canonical input regardless of the schema's strict mode.
+   * Does `value` follow the protocol? Strict predicate — returns false for
+   * any protocol violation regardless of the schema's strict mode.
    */
   isFlagsString(value: unknown): value is FlagsString<U> {
     if (typeof value !== "string") return false;
@@ -144,9 +144,9 @@ export class StringFlags<U extends string> {
   }
 
   /**
-   * Throw `errorInput` unless `value` is a canonical flags string.
-   * Always strict — the whole point of an assertion is a hard boundary.
-   * To normalize non-canonical input, use `getFlags` or `toFlagsString`.
+   * Throw `errorInput` unless `value` follows the protocol. Always strict —
+   * the whole point of an assertion is a hard boundary. To normalize input,
+   * use `getFlags` or `toFlagsString`.
    */
   assertFlagsString(value: unknown, errorInput: ErrorInput): asserts value is FlagsString<U> {
     if (!this.isFlagsString(value)) throw resolveErrorInput(errorInput);
@@ -182,8 +182,9 @@ function resolveInput<U extends string>(input: DefineInput<U>): U[] {
 
 /**
  * Create a StringFlags schema. The `Record<U, true>` form gives
- * compile-time exhaustiveness; the array form does not but is easier
- * to read. Runtime behaviour is identical.
+ * compile-time exhaustiveness — extend the union and TypeScript will
+ * force you to update the definition. The array form is looser.
+ * Runtime behaviour is identical.
  */
 export function defineStringFlags<U extends string>(
   input: DefineInput<U>,
